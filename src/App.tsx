@@ -138,7 +138,7 @@ export default function App() {
         </section>
       ) : <>
         <section className="charts-section" aria-label="全期間の推移">
-          <div className="section-heading"><p className="eyebrow">ALL TIME</p><h2>推移</h2><p>右端が最新です。右へスワイプして過去を確認</p></div>
+          <div className="section-heading"><p className="eyebrow">ALL TIME</p><h2>推移</h2><p>右端が最新です。過去の記録はグラフを2本指で右へなぞって確認</p></div>
           <LineChart title="体重" unit="kg" description="日ごとの体重" series={[{ label: '体重', color: '#e24949', points: points.weight }]} />
           <LineChart title="脂肪量" unit="kg" description="体脂肪量の推移" series={[{ label: '脂肪量', color: '#3978d9', points: points.fat }]} />
           <LineChart title="筋肉量" unit="kg" description="骨格筋量の推移" series={[{ label: '筋肉量', color: '#2c9a69', points: points.muscle }]} />

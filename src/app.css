@@ -70,9 +70,9 @@ input::placeholder { color: #b2b8be; }
 .axis-bound button:focus-visible, .axis-reset:focus-visible { outline: 3px solid #79a8f3; outline-offset: 2px; }
 .chart-plot-layout { align-items: stretch; display: flex; min-width: 0; }
 .chart-y-axis { flex: 0 0 48px; height: 228px; overflow: visible; width: 48px; }
-.chart-scroll { flex: 1 1 auto; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-color: #c0c5ca transparent; }
+.chart-scroll { flex: 1 1 auto; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-color: #c0c5ca transparent; touch-action: pan-y; }
 .chart-scroll:focus-visible { outline: 3px solid #79a8f3; outline-offset: 2px; }
-.line-chart { display: block; min-width: 100%; width: 100%; overflow: visible; touch-action: none; }
+.line-chart { display: block; min-width: 100%; width: 100%; overflow: visible; touch-action: pan-y; }
 .grid-line { stroke: #e5e8ea; stroke-width: 1; }
 .axis-label { fill: #8a949d; font-size: 9.5px; }
 .tooltip-line { stroke: #98a1a9; stroke-width: 1; stroke-dasharray: 3 3; }
