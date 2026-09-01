@@ -1,0 +1,164 @@
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
+import './app.css'
+import { LineChart } from './components/LineChart'
+import { parseBodyCompositionCsv } from './lib/csv'
+import { getAllRecords, importMeasurements, saveCalories } from './lib/database'
+import { formatLongDate, todayInTokyo } from './lib/date'
+import { recentChartPoints, totalCalories } from './lib/metrics'
+import type { DailyRecord } from './types'
+
+type Notice = { kind: 'success' | 'error'; title: string; lines?: string[] }
+
+const numberFormat = (value: number | undefined, digits = 1) => value === undefined ? '—' : value.toLocaleString('ja-JP', { maximumFractionDigits: digits })
+const kcalFormat = (value: number | undefined) => value === undefined ? '—' : value.toLocaleString('ja-JP', { maximumFractionDigits: 0 })
+
+function inputNumber(value: string): number | undefined {
+  if (value.trim() === '') return undefined
+  const result = Number(value)
+  return Number.isFinite(result) && result >= 0 ? result : undefined
+}
+
+export default function App() {
+  const [records, setRecords] = useState<DailyRecord[]>([])
+  const [ready, setReady] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const [form, setForm] = useState({ date: todayInTokyo(), intake: '', active: '' })
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  const refreshRecords = async () => {
+    setRecords(await getAllRecords())
+  }
+  useEffect(() => {
+    refreshRecords().catch(() => setNotice({ kind: 'error', title: '端末内データを読み込めませんでした。' })).finally(() => setReady(true))
+  }, [])
+
+  const points = useMemo(() => ({
+    weight: recentChartPoints(records, (record) => record.weightKg),
+    fat: recentChartPoints(records, (record) => record.bodyFatKg),
+    muscle: recentChartPoints(records, (record) => record.skeletalMuscleKg),
+    calories: recentChartPoints(records, totalCalories)
+  }), [records])
+  const tableRecords = useMemo(() => {
+    const startDate = points.weight[0]?.date
+    const endDate = points.weight.at(-1)?.date
+    return records.filter((record) => !startDate || !endDate || (record.date >= startDate && record.date <= endDate))
+  }, [points.weight, records])
+
+  const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setIsImporting(true)
+    setNotice(null)
+    try {
+      const parsed = parseBodyCompositionCsv(await file.text())
+      if (parsed.missingColumns.length > 0) {
+        setNotice({ kind: 'error', title: 'CSVの必須列が不足しています。既存データは変更していません。', lines: parsed.missingColumns.map((column) => `不足: ${column}`) })
+        return
+      }
+      if (parsed.measurements.length === 0) {
+        setNotice({ kind: 'error', title: '取り込める測定データがありませんでした。', lines: parsed.errors.slice(0, 5) })
+        return
+      }
+      const result = await importMeasurements(parsed.measurements)
+      await refreshRecords()
+      const summary = [`追加 ${result.added}件`, `更新 ${result.updated}件`, `スキップ ${parsed.skipped}件`]
+      const errorLines = parsed.errors.slice(0, 5)
+      setNotice({ kind: 'success', title: 'CSVを取り込みました。', lines: errorLines.length ? [...summary, ...errorLines] : summary })
+    } catch (error) {
+      setNotice({ kind: 'error', title: 'CSVの読み込みに失敗しました。', lines: [error instanceof Error ? error.message : 'もう一度お試しください。'] })
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
+  const changeDate = (date: string) => {
+    const record = records.find((item) => item.date === date)
+    setForm({ date, intake: record?.intakeCalories?.toString() ?? '', active: record?.activeCalories?.toString() ?? '' })
+  }
+
+  const handleSave = async () => {
+    const intake = inputNumber(form.intake)
+    const active = inputNumber(form.active)
+    if ((form.intake !== '' && intake === undefined) || (form.active !== '' && active === undefined)) {
+      setNotice({ kind: 'error', title: 'カロリーは0以上の数値で入力してください。' })
+      return
+    }
+    try {
+      await saveCalories(form.date, intake, active)
+      await refreshRecords()
+      setNotice({ kind: 'success', title: `${formatLongDate(form.date)}のカロリーを保存しました。` })
+    } catch {
+      setNotice({ kind: 'error', title: 'カロリーを保存できませんでした。' })
+    }
+  }
+
+  return (
+    <main className="app-shell">
+      <header className="app-header">
+        <div>
+          <p className="eyebrow">BODY COMPOSITION</p>
+          <h1>からだログ</h1>
+          <p className="header-subtitle">体組成と毎日のエネルギーを、あなたの端末だけに。</p>
+        </div>
+        <button className="import-button" type="button" onClick={() => fileInput.current?.click()} disabled={isImporting}>
+          <span aria-hidden="true">↓</span>{isImporting ? '取込中…' : 'CSVをインポート'}
+        </button>
+        <input ref={fileInput} className="visually-hidden" type="file" accept=".csv,text/csv" onChange={handleFile} aria-label="体組成CSVを選択" />
+      </header>
+
+      {notice && <aside className={`notice ${notice.kind}`} role="status">
+        <strong>{notice.title}</strong>
+        {notice.lines && <ul>{notice.lines.map((line, index) => <li key={`${line}-${index}`}>{line}</li>)}</ul>}
+      </aside>}
+
+      <section className="entry-card" aria-labelledby="entry-title">
+        <div className="section-title-row">
+          <div>
+            <p className="eyebrow">DAILY INPUT</p>
+            <h2 id="entry-title">カロリーを記録</h2>
+          </div>
+          <span>未入力は「—」で表示</span>
+        </div>
+        <div className="entry-fields">
+          <label>日付<input type="date" value={form.date} onChange={(event) => changeDate(event.target.value)} /></label>
+          <label>摂取カロリー <small>kcal</small><input type="number" inputMode="numeric" min="0" step="1" placeholder="例: 2100" value={form.intake} onChange={(event) => setForm({ ...form, intake: event.target.value })} /></label>
+          <label>アクティブ消費 <small>kcal</small><input type="number" inputMode="numeric" min="0" step="1" placeholder="例: 450" value={form.active} onChange={(event) => setForm({ ...form, active: event.target.value })} /></label>
+        </div>
+        <button className="save-button" type="button" onClick={handleSave}>保存／更新</button>
+      </section>
+
+      {!ready ? <div className="loading">記録を読み込んでいます…</div> : records.length === 0 ? (
+        <section className="empty-state" aria-label="データがない状態">
+          <div aria-hidden="true">⌁</div>
+          <h2>まだ記録がありません</h2>
+          <p>上のボタンから体組成計のCSVを取り込むか、日付とカロリーを入力して始めましょう。</p>
+        </section>
+      ) : <>
+        <section className="charts-section" aria-label="直近30日の推移">
+          <div className="section-heading"><p className="eyebrow">LAST 30 DAYS</p><h2>推移</h2><p>最新の記録日を基準に表示</p></div>
+          <LineChart title="体重" unit="kg" color="#e24949" description="日ごとの体重" points={points.weight} />
+          <LineChart title="脂肪量" unit="kg" color="#3978d9" description="体脂肪量の推移" points={points.fat} />
+          <LineChart title="筋肉量" unit="kg" color="#2c9a69" description="骨格筋量の推移" points={points.muscle} />
+          <LineChart title="消費カロリー" unit="kcal" color="#20242a" description="基礎代謝 + アクティブ消費" points={points.calories} />
+        </section>
+        <section className="table-card" aria-labelledby="table-title">
+          <div className="section-heading"><p className="eyebrow">DETAILS</p><h2 id="table-title">日別詳細</h2><p>新しい日付順・横にスクロールできます</p></div>
+          <div className="table-wrap" tabIndex={0} aria-label="日別詳細表。横方向にスクロールできます。">
+            <table>
+              <thead><tr>
+                <th className="sticky-date">日付</th><th>体重<br />(kg)</th><th>体脂肪率<br />(%)</th><th>体脂肪量<br />(kg)</th><th>皮下脂肪率<br />(%)</th><th>内臓脂肪<br />レベル</th><th>基礎代謝<br />(kcal)</th><th>骨格筋率<br />(%)</th><th>摂取<br />(kcal)</th><th>アクティブ消費<br />(kcal)</th>
+              </tr></thead>
+              <tbody>{tableRecords.map((record) => <tr key={record.date}>
+                <th className="sticky-date" scope="row">{formatLongDate(record.date)}</th>
+                <td>{numberFormat(record.weightKg)}</td><td>{numberFormat(record.bodyFatPct)}</td><td>{numberFormat(record.bodyFatKg)}</td><td>{numberFormat(record.subcutaneousFatPct)}</td><td>{numberFormat(record.visceralFatLevel)}</td><td>{kcalFormat(record.basalMetabolismKcal)}</td><td>{numberFormat(record.skeletalMusclePct)}</td><td>{kcalFormat(record.intakeCalories)}</td><td>{kcalFormat(record.activeCalories)}</td>
+              </tr>)}</tbody>
+            </table>
+          </div>
+        </section>
+      </>}
+      <footer>データはこの端末のブラウザ内に保存されています。</footer>
+    </main>
+  )
+}
