@@ -1,0 +1,57 @@
+name: からだログを公開
+
+on:
+  push:
+    branches: ['main']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ソースを取得
+        uses: actions/checkout@v4
+
+      - name: Node.jsを準備
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: pnpmを準備
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: 部品をインストール
+        run: pnpm install --frozen-lockfile
+
+      - name: アプリを作成
+        run: pnpm build
+
+      - name: Pagesを準備
+        uses: actions/configure-pages@v5
+
+      - name: 公開用ファイルをアップロード
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: './dist'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: 公開
+        id: deployment
+        uses: actions/deploy-pages@v4
