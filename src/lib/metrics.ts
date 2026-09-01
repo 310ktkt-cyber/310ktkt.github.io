@@ -29,11 +29,31 @@ export function recentChartPoints(
   const recordByDate = new Map(records.map((record) => [record.date, record]))
   const latestRecordDate = records.reduce<string | undefined>((latest, record) => (!latest || record.date > latest ? record.date : latest), undefined)
   const end = endDate ?? latestRecordDate ?? todayInTokyo()
+  return chartPointsForRange(recordByDate, readValue, addDays(end, -days + 1), end)
+}
+
+/** Returns every calendar day from the oldest to newest saved record, preserving gaps. */
+export function allChartPoints(
+  records: DailyRecord[],
+  readValue: (record: DailyRecord) => number | undefined | null
+): ChartPoint[] {
+  if (records.length === 0) return []
+  const recordByDate = new Map(records.map((record) => [record.date, record]))
+  const dates = records.map((record) => record.date).sort()
+  return chartPointsForRange(recordByDate, readValue, dates[0], dates.at(-1)!)
+}
+
+function chartPointsForRange(
+  recordByDate: Map<string, DailyRecord>,
+  readValue: (record: DailyRecord) => number | undefined | null,
+  start: string,
+  end: string
+): ChartPoint[] {
+  const days = Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1
   const values = Array.from({ length: days }, (_, index) => {
-    const date = addDays(end, index - days + 1)
-    const value = readValue(recordByDate.get(date) ?? ({} as DailyRecord))
+    const value = readValue(recordByDate.get(addDays(start, index)) ?? ({} as DailyRecord))
     return value === undefined || value === null ? null : value
   })
   const averages = sevenDayMovingAverage(values)
-  return values.map((value, index) => ({ date: addDays(end, index - days + 1), value, average: averages[index] }))
+  return values.map((value, index) => ({ date: addDays(start, index), value, average: averages[index] }))
 }

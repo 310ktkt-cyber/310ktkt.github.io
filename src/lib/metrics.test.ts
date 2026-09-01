@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { recentChartPoints, sevenDayMovingAverage, totalCalories } from './metrics'
+import { allChartPoints, recentChartPoints, sevenDayMovingAverage, totalCalories } from './metrics'
 
 describe('calories and moving averages', () => {
   it('only calculates total calories when both source values exist', () => {
@@ -18,6 +18,18 @@ describe('calories and moving averages', () => {
       { date: '2026-07-08', value: null, average: null },
       { date: '2026-07-09', value: null, average: null },
       { date: '2026-07-10', value: 64, average: 64 }
+    ])
+  })
+
+  it('returns the entire saved period so older dates can be charted', () => {
+    const points = allChartPoints([
+      { date: '2026-06-01', weightKg: 65, updatedAt: 'x' },
+      { date: '2026-06-03', weightKg: 64.5, updatedAt: 'x' }
+    ], (record) => record.weightKg)
+    expect(points).toEqual([
+      { date: '2026-06-01', value: 65, average: 65 },
+      { date: '2026-06-02', value: null, average: 65 },
+      { date: '2026-06-03', value: 64.5, average: 64.75 }
     ])
   })
 })

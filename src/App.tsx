@@ -3,8 +3,8 @@ import './app.css'
 import { LineChart } from './components/LineChart'
 import { parseBodyCompositionCsv } from './lib/csv'
 import { getAllRecords, importMeasurements, saveCalories } from './lib/database'
-import { formatLongDate, todayInTokyo } from './lib/date'
-import { recentChartPoints, totalCalories } from './lib/metrics'
+import { addDays, formatLongDate, todayInTokyo } from './lib/date'
+import { allChartPoints, totalCalories } from './lib/metrics'
 import type { DailyRecord } from './types'
 
 type Notice = { kind: 'success' | 'error'; title: string; lines?: string[] }
@@ -34,16 +34,17 @@ export default function App() {
   }, [])
 
   const points = useMemo(() => ({
-    weight: recentChartPoints(records, (record) => record.weightKg),
-    fat: recentChartPoints(records, (record) => record.bodyFatKg),
-    muscle: recentChartPoints(records, (record) => record.skeletalMuscleKg),
-    calories: recentChartPoints(records, totalCalories)
+    weight: allChartPoints(records, (record) => record.weightKg),
+    fat: allChartPoints(records, (record) => record.bodyFatKg),
+    muscle: allChartPoints(records, (record) => record.skeletalMuscleKg),
+    calories: allChartPoints(records, totalCalories),
+    intake: allChartPoints(records, (record) => record.intakeCalories)
   }), [records])
   const tableRecords = useMemo(() => {
-    const startDate = points.weight[0]?.date
-    const endDate = points.weight.at(-1)?.date
+    const endDate = records.reduce<string | undefined>((latest, record) => !latest || record.date > latest ? record.date : latest, undefined)
+    const startDate = endDate ? addDays(endDate, -29) : undefined
     return records.filter((record) => !startDate || !endDate || (record.date >= startDate && record.date <= endDate))
-  }, [points.weight, records])
+  }, [records])
 
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -136,12 +137,15 @@ export default function App() {
           <p>上のボタンから体組成計のCSVを取り込むか、日付とカロリーを入力して始めましょう。</p>
         </section>
       ) : <>
-        <section className="charts-section" aria-label="直近30日の推移">
-          <div className="section-heading"><p className="eyebrow">LAST 30 DAYS</p><h2>推移</h2><p>最新の記録日を基準に表示</p></div>
-          <LineChart title="体重" unit="kg" color="#e24949" description="日ごとの体重" points={points.weight} />
-          <LineChart title="脂肪量" unit="kg" color="#3978d9" description="体脂肪量の推移" points={points.fat} />
-          <LineChart title="筋肉量" unit="kg" color="#2c9a69" description="骨格筋量の推移" points={points.muscle} />
-          <LineChart title="消費カロリー" unit="kcal" color="#20242a" description="基礎代謝 + アクティブ消費" points={points.calories} />
+        <section className="charts-section" aria-label="全期間の推移">
+          <div className="section-heading"><p className="eyebrow">ALL TIME</p><h2>推移</h2><p>右端が最新です。右へスワイプして過去を確認</p></div>
+          <LineChart title="体重" unit="kg" description="日ごとの体重" series={[{ label: '体重', color: '#e24949', points: points.weight }]} />
+          <LineChart title="脂肪量" unit="kg" description="体脂肪量の推移" series={[{ label: '脂肪量', color: '#3978d9', points: points.fat }]} />
+          <LineChart title="筋肉量" unit="kg" description="骨格筋量の推移" series={[{ label: '筋肉量', color: '#2c9a69', points: points.muscle }]} />
+          <LineChart title="消費・摂取カロリー" unit="kcal" description="消費 = 基礎代謝 + アクティブ消費" series={[
+            { label: '消費カロリー', color: '#20242a', points: points.calories },
+            { label: '摂取カロリー', color: '#c18a00', points: points.intake }
+          ]} />
         </section>
         <section className="table-card" aria-labelledby="table-title">
           <div className="section-heading"><p className="eyebrow">DETAILS</p><h2 id="table-title">日別詳細</h2><p>新しい日付順・横にスクロールできます</p></div>
