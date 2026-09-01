@@ -15,34 +15,57 @@ export type ChartSeries = {
   points: ChartPoint[]
 }
 
-const WIDTH = 360
 const HEIGHT = 228
-const MARGIN = { top: 34, right: 18, bottom: 36, left: 48 }
+const AXIS_WIDTH = 48
+const TOP_PADDING = 34
+const RIGHT_PADDING = 18
+const BOTTOM_PADDING = 36
+const MIN_CHART_WIDTH = 286
+const POINT_SPACING = 10
+
+type AxisRange = { min: number; max: number }
 
 function formatValue(value: number, unit: string): string {
   return `${value.toLocaleString('ja-JP', { maximumFractionDigits: unit === 'kcal' ? 0 : 1 })} ${unit}`
+}
+
+function formatAxisValue(value: number, unit: string): string {
+  return value.toLocaleString('ja-JP', { maximumFractionDigits: unit === 'kcal' ? 0 : 1 })
+}
+
+function calculateAxisRange(values: number[], unit: string): AxisRange {
+  if (values.length === 0) return { min: 0, max: 1 }
+  const smallest = Math.min(...values)
+  const largest = Math.max(...values)
+  const spread = largest - smallest
+  const padding = spread === 0
+    ? Math.max(Math.abs(largest) * 0.06, unit === 'kcal' ? 50 : 0.5)
+    : spread * 0.15
+  return { min: Math.max(0, smallest - padding), max: largest + padding }
 }
 
 export function LineChart({ title, unit, series, description }: Props) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const scrollContainer = useRef<HTMLDivElement>(null)
   const points = series[0]?.points ?? []
-  const validValues = series.flatMap((line) => line.points.flatMap((point) => [point.value, point.average]))
+  const validValues = series
+    .flatMap((line) => line.points.flatMap((point) => [point.value, point.average]))
     .filter((value): value is number => value !== null)
   const hasData = validValues.length > 0
-  const { min, max } = useMemo(() => {
-    if (!hasData) return { min: 0, max: 1 }
-    const smallest = Math.min(...validValues)
-    const largest = Math.max(...validValues)
-    const spread = largest - smallest
-    const padding = spread === 0 ? Math.max(Math.abs(largest) * 0.06, unit === 'kcal' ? 50 : 0.5) : spread * 0.15
-    return { min: Math.max(0, smallest - padding), max: largest + padding }
-  }, [hasData, unit, validValues])
-  const chartWidth = Math.max(WIDTH, MARGIN.left + MARGIN.right + Math.max(points.length - 1, 0) * 12)
-  const plotWidth = chartWidth - MARGIN.left - MARGIN.right
-  const plotHeight = HEIGHT - MARGIN.top - MARGIN.bottom
-  const x = (index: number) => MARGIN.left + (index / Math.max(points.length - 1, 1)) * plotWidth
-  const y = (value: number) => MARGIN.top + (1 - (value - min) / (max - min)) * plotHeight
+  const recentValues = series
+    .flatMap((line) => line.points.slice(-30).flatMap((point) => [point.value, point.average]))
+    .filter((value): value is number => value !== null)
+  const autoRange = useMemo(() => calculateAxisRange(recentValues, unit), [recentValues, unit])
+  const [axisRange, setAxisRange] = useState<AxisRange>(autoRange)
+  const { min, max } = axisRange
+  const chartWidth = Math.max(MIN_CHART_WIDTH, RIGHT_PADDING + Math.max(points.length - 1, 0) * POINT_SPACING)
+  const plotWidth = chartWidth - RIGHT_PADDING - 4
+  const plotHeight = HEIGHT - TOP_PADDING - BOTTOM_PADDING
+  const x = (index: number) => 4 + (index / Math.max(points.length - 1, 1)) * plotWidth
+  const y = (value: number) => TOP_PADDING + (1 - (value - min) / (max - min)) * plotHeight
+  const adjustmentStep = unit === 'kcal' ? 100 : 0.5
+  const minimumRange = unit === 'kcal' ? 1 : 0.1
+
   const pathFor = (line: ChartSeries, field: 'value' | 'average') => {
     let active = false
     return line.points.reduce((path, point, index) => {
@@ -56,6 +79,7 @@ export function LineChart({ title, unit, series, description }: Props) {
       return `${path}${command}${x(index).toFixed(1)},${y(value).toFixed(1)} `
     }, '')
   }
+
   const tickIndexes = useMemo(() => {
     if (points.length <= 6) return points.map((_, index) => index)
     const labelCount = Math.max(2, Math.floor(plotWidth / 72) + 1)
@@ -68,9 +92,31 @@ export function LineChart({ title, unit, series, description }: Props) {
   const selected = selectedIndex === null ? null : points[selectedIndex]
 
   useEffect(() => {
+    setAxisRange(autoRange)
+  }, [autoRange.min, autoRange.max])
+
+  useEffect(() => {
     const element = scrollContainer.current
     if (element) element.scrollLeft = element.scrollWidth
   }, [chartWidth])
+
+  const adjustLower = (direction: -1 | 1) => {
+    setAxisRange(({ min: currentMin, max: currentMax }) => ({
+      min: direction === -1
+        ? Math.max(0, currentMin - adjustmentStep)
+        : Math.min(currentMin + adjustmentStep, currentMax - minimumRange),
+      max: currentMax
+    }))
+  }
+
+  const adjustUpper = (direction: -1 | 1) => {
+    setAxisRange(({ min: currentMin, max: currentMax }) => ({
+      min: currentMin,
+      max: direction === -1
+        ? Math.max(currentMin + minimumRange, currentMax - adjustmentStep)
+        : currentMax + adjustmentStep
+    }))
+  }
 
   return (
     <section className="chart-card" aria-labelledby={`chart-${title}`}>
@@ -89,52 +135,71 @@ export function LineChart({ title, unit, series, description }: Props) {
       </div>
       {hasData ? (
         <>
-          <div ref={scrollContainer} className="chart-scroll" tabIndex={0} aria-label={`${title}のグラフ。右へスワイプすると過去の記録を確認できます。`}>
-          <svg
-            className="line-chart"
-            style={chartWidth > WIDTH ? { width: `${chartWidth}px` } : undefined}
-            viewBox={`0 0 ${chartWidth} ${HEIGHT}`}
-            role="img"
-            aria-label={`${title}の推移グラフ。${series.map((line) => line.label).join('と')}と、それぞれの7日間移動平均を表示しています。`}
-            onPointerMove={(event) => {
-              const rect = event.currentTarget.getBoundingClientRect()
-              const plotStart = (MARGIN.left / chartWidth) * rect.width
-              const renderedPlotWidth = (plotWidth / chartWidth) * rect.width
-              const position = Math.max(0, Math.min(renderedPlotWidth, event.clientX - rect.left - plotStart))
-              setSelectedIndex(Math.round((position / renderedPlotWidth) * (points.length - 1)))
-            }}
-            onPointerLeave={() => setSelectedIndex(null)}
-          >
-            {yTicks.map((value) => (
-              <g key={value}>
-                <line x1={MARGIN.left} x2={chartWidth - MARGIN.right} y1={y(value)} y2={y(value)} className="grid-line" />
-                <text x={MARGIN.left - 7} y={y(value) + 4} textAnchor="end" className="axis-label">
-                  {value.toLocaleString('ja-JP', { maximumFractionDigits: unit === 'kcal' ? 0 : 1 })}
+          <div className="axis-controls" role="group" aria-label={`${title}の縦軸の範囲を調整`}>
+            <span>Y軸（直近30日を基準）</span>
+            <div className="axis-control-actions">
+              <div className="axis-bound">
+                <span>下限 {formatAxisValue(min, unit)}</span>
+                <button type="button" onClick={() => adjustLower(-1)} aria-label={`${title}の縦軸の下限を下げる`}>−</button>
+                <button type="button" onClick={() => adjustLower(1)} aria-label={`${title}の縦軸の下限を上げる`}>＋</button>
+              </div>
+              <div className="axis-bound">
+                <span>上限 {formatAxisValue(max, unit)}</span>
+                <button type="button" onClick={() => adjustUpper(-1)} aria-label={`${title}の縦軸の上限を下げる`}>−</button>
+                <button type="button" onClick={() => adjustUpper(1)} aria-label={`${title}の縦軸の上限を上げる`}>＋</button>
+              </div>
+              <button className="axis-reset" type="button" onClick={() => setAxisRange(autoRange)}>自動に戻す</button>
+            </div>
+          </div>
+          <div className="chart-plot-layout">
+            <svg className="chart-y-axis" viewBox={`0 0 ${AXIS_WIDTH} ${HEIGHT}`} aria-hidden="true">
+              {yTicks.map((value) => (
+                <text key={value} x={AXIS_WIDTH - 7} y={y(value) + 4} textAnchor="end" className="axis-label">
+                  {formatAxisValue(value, unit)}
                 </text>
-              </g>
-            ))}
-            {tickIndexes.map((index) => (
-              <text key={index} x={x(index)} y={HEIGHT - 12} textAnchor="middle" className="axis-label">
-                {formatShortDate(points[index].date)}
-              </text>
-            ))}
-            {series.map((line) => <g key={line.label}>
-              <path d={pathFor(line, 'average')} fill="none" stroke={line.color} strokeWidth="2" strokeDasharray="5 4" opacity="0.45" />
-              <path d={pathFor(line, 'value')} fill="none" stroke={line.color} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-              {line.points.map((point, index) => point.value !== null && (
-                <circle key={point.date} cx={x(index)} cy={y(point.value)} r="3.2" fill={line.color} />
               ))}
-            </g>)}
-            {selected && (
-              <g>
-                <line x1={x(selectedIndex!)} x2={x(selectedIndex!)} y1={MARGIN.top} y2={HEIGHT - MARGIN.bottom} className="tooltip-line" />
-                {series.map((line) => {
-                  const point = line.points[selectedIndex!]
-                  return point?.value !== null && point ? <circle key={line.label} cx={x(selectedIndex!)} cy={y(point.value)} r="5" fill="#fff" stroke={line.color} strokeWidth="2.5" /> : null
-                })}
-              </g>
-            )}
-          </svg>
+            </svg>
+            <div ref={scrollContainer} className="chart-scroll" tabIndex={0} aria-label={`${title}のグラフ。右へスワイプすると過去の記録を確認できます。`}>
+              <svg
+                className="line-chart"
+                style={{ width: `${chartWidth}px` }}
+                viewBox={`0 0 ${chartWidth} ${HEIGHT}`}
+                role="img"
+                aria-label={`${title}の推移グラフ。${series.map((line) => line.label).join('と')}と、それぞれの7日間移動平均を表示しています。`}
+                onPointerMove={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  const renderedPlotWidth = (plotWidth / chartWidth) * rect.width
+                  const position = Math.max(0, Math.min(renderedPlotWidth, event.clientX - rect.left - (4 / chartWidth) * rect.width))
+                  setSelectedIndex(Math.round((position / renderedPlotWidth) * (points.length - 1)))
+                }}
+                onPointerLeave={() => setSelectedIndex(null)}
+              >
+                {yTicks.map((value) => (
+                  <line key={value} x1="4" x2={chartWidth - RIGHT_PADDING} y1={y(value)} y2={y(value)} className="grid-line" />
+                ))}
+                {tickIndexes.map((index) => (
+                  <text key={index} x={x(index)} y={HEIGHT - 12} textAnchor="middle" className="axis-label">
+                    {formatShortDate(points[index].date)}
+                  </text>
+                ))}
+                {series.map((line) => <g key={line.label}>
+                  <path d={pathFor(line, 'average')} fill="none" stroke={line.color} strokeWidth="2" strokeDasharray="5 4" opacity="0.45" />
+                  <path d={pathFor(line, 'value')} fill="none" stroke={line.color} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                  {line.points.map((point, index) => point.value !== null && (
+                    <circle key={point.date} cx={x(index)} cy={y(point.value)} r="3.2" fill={line.color} />
+                  ))}
+                </g>)}
+                {selected && (
+                  <g>
+                    <line x1={x(selectedIndex!)} x2={x(selectedIndex!)} y1={TOP_PADDING} y2={HEIGHT - BOTTOM_PADDING} className="tooltip-line" />
+                    {series.map((line) => {
+                      const point = line.points[selectedIndex!]
+                      return point?.value !== null && point ? <circle key={line.label} cx={x(selectedIndex!)} cy={y(point.value)} r="5" fill="#fff" stroke={line.color} strokeWidth="2.5" /> : null
+                    })}
+                  </g>
+                )}
+              </svg>
+            </div>
           </div>
           <p className="chart-tooltip" aria-live="polite">
             {selected
