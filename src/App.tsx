@@ -11,6 +11,7 @@ type Notice = { kind: 'success' | 'error'; title: string; lines?: string[] }
 
 const numberFormat = (value: number | undefined, digits = 1) => value === undefined ? '—' : value.toLocaleString('ja-JP', { maximumFractionDigits: digits })
 const kcalFormat = (value: number | undefined) => value === undefined ? '—' : value.toLocaleString('ja-JP', { maximumFractionDigits: 0 })
+const TABLE_DAYS = 365
 
 function inputNumber(value: string): number | undefined {
   if (value.trim() === '') return undefined
@@ -42,7 +43,7 @@ export default function App() {
   }), [records])
   const tableRecords = useMemo(() => {
     const endDate = records.reduce<string | undefined>((latest, record) => !latest || record.date > latest ? record.date : latest, undefined)
-    const startDate = endDate ? addDays(endDate, -29) : undefined
+    const startDate = endDate ? addDays(endDate, -TABLE_DAYS + 1) : undefined
     return records.filter((record) => !startDate || !endDate || (record.date >= startDate && record.date <= endDate))
   }, [records])
 
@@ -148,15 +149,15 @@ export default function App() {
           ]} />
         </section>
         <section className="table-card" aria-labelledby="table-title">
-          <div className="section-heading"><p className="eyebrow">DETAILS</p><h2 id="table-title">日別詳細</h2><p>新しい日付順・横にスクロールできます</p></div>
-          <div className="table-wrap" tabIndex={0} aria-label="日別詳細表。横方向にスクロールできます。">
+          <div className="section-heading"><p className="eyebrow">DETAILS</p><h2 id="table-title">日別詳細</h2><p>直近1年・新しい日付順。下へスクロールして確認できます</p></div>
+          <div className="table-wrap" tabIndex={0} aria-label="直近1年の日別詳細表。横方向にスクロールできます。">
             <table>
               <thead><tr>
-                <th className="sticky-date">日付</th><th>体重<br />(kg)</th><th>体脂肪率<br />(%)</th><th>体脂肪量<br />(kg)</th><th>皮下脂肪率<br />(%)</th><th>内臓脂肪<br />レベル</th><th>基礎代謝<br />(kcal)</th><th>骨格筋率<br />(%)</th><th>摂取<br />(kcal)</th><th>アクティブ消費<br />(kcal)</th>
+                <th className="sticky-date">日付</th><th>体重<br />(kg)</th><th>体脂肪率<br />(%)</th><th>体脂肪量<br />(kg)</th><th>皮下脂肪率<br />(%)</th><th>内臓脂肪<br />レベル</th><th>基礎代謝<br />(kcal)</th><th>骨格筋率<br />(%)</th><th>筋肉量<br />(kg)</th><th>摂取<br />(kcal)</th><th>アクティブ消費<br />(kcal)</th>
               </tr></thead>
               <tbody>{tableRecords.map((record) => <tr key={record.date}>
                 <th className="sticky-date" scope="row">{formatLongDate(record.date)}</th>
-                <td>{numberFormat(record.weightKg)}</td><td>{numberFormat(record.bodyFatPct)}</td><td>{numberFormat(record.bodyFatKg)}</td><td>{numberFormat(record.subcutaneousFatPct)}</td><td>{numberFormat(record.visceralFatLevel)}</td><td>{kcalFormat(record.basalMetabolismKcal)}</td><td>{numberFormat(record.skeletalMusclePct)}</td><td>{kcalFormat(record.intakeCalories)}</td><td>{kcalFormat(record.activeCalories)}</td>
+                <td>{numberFormat(record.weightKg)}</td><td>{numberFormat(record.bodyFatPct)}</td><td>{numberFormat(record.bodyFatKg)}</td><td>{numberFormat(record.subcutaneousFatPct)}</td><td>{numberFormat(record.visceralFatLevel)}</td><td>{kcalFormat(record.basalMetabolismKcal)}</td><td>{numberFormat(record.skeletalMusclePct)}</td><td>{numberFormat(record.skeletalMuscleKg)}</td><td>{kcalFormat(record.intakeCalories)}</td><td>{kcalFormat(record.activeCalories)}</td>
               </tr>)}</tbody>
             </table>
           </div>

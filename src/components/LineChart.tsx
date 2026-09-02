@@ -24,6 +24,8 @@ const MIN_CHART_WIDTH = 286
 const POINT_SPACING = 10
 
 type AxisRange = { min: number; max: number }
+type SingleTouch = { startX: number; startY: number; moved: boolean }
+type TwoFingerScroll = { lastCenterX: number }
 
 function formatValue(value: number, unit: string): string {
   return `${value.toLocaleString('ja-JP', { maximumFractionDigits: unit === 'kcal' ? 0 : 1 })} ${unit}`
@@ -47,8 +49,10 @@ function calculateAxisRange(values: number[], unit: string): AxisRange {
 export function LineChart({ title, unit, series, description }: Props) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const scrollContainer = useRef<HTMLDivElement>(null)
-  const twoFingerScroll = useRef<{ startX: number; startScrollLeft: number } | null>(null)
-  const singleTouchStartX = useRef<number | null>(null)
+  const chartSvg = useRef<SVGSVGElement>(null)
+  const twoFingerScroll = useRef<TwoFingerScroll | null>(null)
+  const singleTouch = useRef<SingleTouch | null>(null)
+  const twoFingerUsed = useRef(false)
   const suppressNextTap = useRef(false)
   const points = series[0]?.points ?? []
   const validValues = series
@@ -110,6 +114,33 @@ export function LineChart({ title, unit, series, description }: Props) {
     const element = scrollContainer.current
     if (element) element.scrollLeft = element.scrollWidth
   }, [chartWidth])
+
+  useEffect(() => {
+    const element = scrollContainer.current
+    if (!element || !hasData) return
+
+    const handleTouchMove = (event: TouchEvent) => {
+      const currentSingleTouch = singleTouch.current
+      if (event.touches.length === 1 && currentSingleTouch && !twoFingerUsed.current) {
+        const touch = event.touches[0]
+        if (Math.hypot(touch.clientX - currentSingleTouch.startX, touch.clientY - currentSingleTouch.startY) > 10) {
+          currentSingleTouch.moved = true
+          suppressNextTap.current = true
+        }
+        return
+      }
+
+      const activeScroll = twoFingerScroll.current
+      if (event.touches.length !== 2 || !activeScroll) return
+      event.preventDefault()
+      const centerX = (event.touches[0].clientX + event.touches[1].clientX) / 2
+      element.scrollLeft -= centerX - activeScroll.lastCenterX
+      activeScroll.lastCenterX = centerX
+    }
+
+    element.addEventListener('touchmove', handleTouchMove, { passive: false })
+    return () => element.removeEventListener('touchmove', handleTouchMove)
+  }, [hasData])
 
   const adjustLower = (direction: -1 | 1) => {
     setAxisRange(({ min: currentMin, max: currentMax }) => ({
@@ -177,38 +208,44 @@ export function LineChart({ title, unit, series, description }: Props) {
               aria-label={`${title}のグラフ。日付の値は1本指でタップ、過去の記録は2本指で右へなぞって確認できます。`}
               onTouchStart={(event) => {
                 if (event.touches.length === 1) {
-                  singleTouchStartX.current = event.touches[0].clientX
+                  singleTouch.current = {
+                    startX: event.touches[0].clientX,
+                    startY: event.touches[0].clientY,
+                    moved: false
+                  }
+                  twoFingerUsed.current = false
                   suppressNextTap.current = false
                   return
                 }
                 if (event.touches.length === 2) {
                   const centerX = (event.touches[0].clientX + event.touches[1].clientX) / 2
-                  twoFingerScroll.current = { startX: centerX, startScrollLeft: event.currentTarget.scrollLeft }
-                  singleTouchStartX.current = null
+                  twoFingerScroll.current = { lastCenterX: centerX }
+                  singleTouch.current = null
+                  twoFingerUsed.current = true
                   suppressNextTap.current = true
                   setSelectedIndex(null)
                 }
               }}
-              onTouchMove={(event) => {
-                if (event.touches.length === 1 && singleTouchStartX.current !== null) {
-                  if (Math.abs(event.touches[0].clientX - singleTouchStartX.current) > 10) suppressNextTap.current = true
-                  return
-                }
-                if (event.touches.length !== 2 || !twoFingerScroll.current) return
-                event.preventDefault()
-                const centerX = (event.touches[0].clientX + event.touches[1].clientX) / 2
-                event.currentTarget.scrollLeft = twoFingerScroll.current.startScrollLeft - (centerX - twoFingerScroll.current.startX)
-              }}
               onTouchEnd={(event) => {
                 if (event.touches.length < 2) twoFingerScroll.current = null
-                if (event.touches.length === 0) singleTouchStartX.current = null
+                if (event.touches.length !== 0) return
+                const endedSingleTouch = singleTouch.current
+                const lastTouch = event.changedTouches[0]
+                if (endedSingleTouch && !endedSingleTouch.moved && !twoFingerUsed.current && lastTouch && chartSvg.current) {
+                  setSelectedIndex(indexAtClientX(lastTouch.clientX, chartSvg.current))
+                  suppressNextTap.current = true
+                }
+                singleTouch.current = null
+                twoFingerUsed.current = false
               }}
               onTouchCancel={() => {
                 twoFingerScroll.current = null
-                singleTouchStartX.current = null
+                singleTouch.current = null
+                twoFingerUsed.current = false
               }}
             >
               <svg
+                ref={chartSvg}
                 className="line-chart"
                 style={{ width: `${chartWidth}px` }}
                 viewBox={`0 0 ${chartWidth} ${HEIGHT}`}

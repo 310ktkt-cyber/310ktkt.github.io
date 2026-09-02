@@ -70,7 +70,7 @@ input::placeholder { color: #b2b8be; }
 .axis-bound button:focus-visible, .axis-reset:focus-visible { outline: 3px solid #79a8f3; outline-offset: 2px; }
 .chart-plot-layout { align-items: stretch; display: flex; min-width: 0; }
 .chart-y-axis { flex: 0 0 48px; height: 228px; overflow: visible; width: 48px; }
-.chart-scroll { flex: 1 1 auto; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-color: #c0c5ca transparent; touch-action: pan-y; }
+.chart-scroll { flex: 1 1 auto; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scrollbar-color: #c0c5ca transparent; touch-action: pan-y; }
 .chart-scroll:focus-visible { outline: 3px solid #79a8f3; outline-offset: 2px; }
 .line-chart { display: block; min-width: 100%; width: 100%; overflow: visible; touch-action: pan-y; }
 .grid-line { stroke: #e5e8ea; stroke-width: 1; }
@@ -82,7 +82,7 @@ input::placeholder { color: #b2b8be; }
 .table-card { padding: 18px 0 6px; overflow: hidden; }
 .table-card .section-heading { padding: 0 15px; }
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-color: #c0c5ca transparent; }
-table { border-collapse: separate; border-spacing: 0; min-width: 917px; width: 100%; font-size: 12px; }
+table { border-collapse: separate; border-spacing: 0; min-width: 999px; width: 100%; font-size: 12px; }
 th, td { border-bottom: 1px solid #e9ebed; min-width: 82px; padding: 11px 9px; text-align: right; white-space: nowrap; }
 thead th { background: #f6f7f8; color: #53606a; font-size: 10px; font-weight: 800; line-height: 1.4; text-align: right; }
 tbody td { color: #2d3740; }
