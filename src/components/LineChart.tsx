@@ -9,6 +9,7 @@ type Props = {
   series: ChartSeries[]
   axisOptimizationToken: number
   periodSelectionToken: number
+  displayPeriodDays: number
 }
 
 export type ChartSeries = {
@@ -23,6 +24,7 @@ const TOP_PADDING = 34
 const RIGHT_PADDING = 18
 const BOTTOM_PADDING = 36
 const MIN_CHART_WIDTH = 286
+const COMPACT_CHART_WIDTH = 260
 const POINT_SPACING = 10
 
 type AxisRange = { min: number; max: number }
@@ -37,6 +39,10 @@ function formatAxisValue(value: number, unit: string): string {
   return value.toLocaleString('ja-JP', { maximumFractionDigits: unit === 'kcal' ? 0 : 1 })
 }
 
+function formatMonth(date: string): string {
+  return `${Number(date.slice(5, 7))}月`
+}
+
 function calculateAxisRange(values: number[], unit: string): AxisRange {
   if (values.length === 0) return { min: 0, max: 1 }
   const smallest = Math.min(...values)
@@ -48,7 +54,7 @@ function calculateAxisRange(values: number[], unit: string): AxisRange {
   return { min: Math.max(0, smallest - padding), max: largest + padding }
 }
 
-export function LineChart({ title, unit, series, description, axisOptimizationToken, periodSelectionToken }: Props) {
+export function LineChart({ title, unit, series, description, axisOptimizationToken, periodSelectionToken, displayPeriodDays }: Props) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const scrollContainer = useRef<HTMLDivElement>(null)
   const chartSvg = useRef<SVGSVGElement>(null)
@@ -68,7 +74,10 @@ export function LineChart({ title, unit, series, description, axisOptimizationTo
   const [axisRange, setAxisRange] = useState<AxisRange>(autoRange)
   const [defaultAxisRange, setDefaultAxisRange] = useState<AxisRange>(autoRange)
   const { min, max } = axisRange
-  const chartWidth = Math.max(MIN_CHART_WIDTH, RIGHT_PADDING + Math.max(points.length - 1, 0) * POINT_SPACING)
+  const isMonthlyView = displayPeriodDays >= 90
+  const chartWidth = isMonthlyView
+    ? COMPACT_CHART_WIDTH
+    : Math.max(MIN_CHART_WIDTH, RIGHT_PADDING + Math.max(points.length - 1, 0) * POINT_SPACING)
   const plotWidth = chartWidth - RIGHT_PADDING - 4
   const plotHeight = HEIGHT - TOP_PADDING - BOTTOM_PADDING
   const x = (index: number) => 4 + (index / Math.max(points.length - 1, 1)) * plotWidth
@@ -91,13 +100,16 @@ export function LineChart({ title, unit, series, description, axisOptimizationTo
   }
 
   const tickIndexes = useMemo(() => {
+    if (isMonthlyView) {
+      return points.flatMap((point, index) => point.date.endsWith('-01') ? [index] : [])
+    }
     if (points.length <= 6) return points.map((_, index) => index)
     const labelCount = Math.max(2, Math.floor(plotWidth / 72) + 1)
     const step = Math.ceil((points.length - 1) / (labelCount - 1))
     const indexes = Array.from({ length: Math.ceil((points.length - 1) / step) }, (_, index) => index * step)
     if (indexes.at(-1) !== points.length - 1) indexes.push(points.length - 1)
     return indexes
-  }, [plotWidth, points])
+  }, [isMonthlyView, plotWidth, points])
   const yTicks = [0, 1, 2, 3].map((index) => min + ((max - min) * index) / 3)
   const selected = selectedIndex === null ? null : points[selectedIndex]
 
@@ -237,7 +249,9 @@ export function LineChart({ title, unit, series, description, axisOptimizationTo
               ref={scrollContainer}
               className="chart-scroll"
               tabIndex={0}
-              aria-label={`${title}のグラフ。日付の値は1本指でタップ、過去の記録は2本指で右へなぞって確認できます。`}
+              aria-label={isMonthlyView
+                ? `${title}のグラフ。選択した期間を画面内に表示し、月初の補助線を表示しています。`
+                : `${title}のグラフ。日付の値は1本指でタップ、過去の記録は2本指で右へなぞって確認できます。`}
               onTouchStart={(event) => {
                 if (event.touches.length === 1) {
                   singleTouch.current = {
@@ -299,9 +313,12 @@ export function LineChart({ title, unit, series, description, axisOptimizationTo
                 {yTicks.map((value) => (
                   <line key={value} x1="4" x2={chartWidth - RIGHT_PADDING} y1={y(value)} y2={y(value)} className="grid-line" />
                 ))}
+                {isMonthlyView && tickIndexes.map((index) => (
+                  <line key={`month-grid-${points[index].date}`} x1={x(index)} x2={x(index)} y1={TOP_PADDING} y2={HEIGHT - BOTTOM_PADDING} className="month-grid-line" />
+                ))}
                 {tickIndexes.map((index) => (
                   <text key={index} x={x(index)} y={HEIGHT - 12} textAnchor="middle" className="axis-label">
-                    {formatShortDate(points[index].date)}
+                    {isMonthlyView ? formatMonth(points[index].date) : formatShortDate(points[index].date)}
                   </text>
                 ))}
                 {series.map((line) => <g key={line.label}>

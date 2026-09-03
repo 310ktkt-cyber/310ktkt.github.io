@@ -83,6 +83,7 @@ input::placeholder { color: #b2b8be; }
 .chart-scroll:focus-visible { outline: 3px solid #79a8f3; outline-offset: 2px; }
 .line-chart { display: block; min-width: 100%; width: 100%; overflow: visible; touch-action: pan-y; }
 .grid-line { stroke: #e5e8ea; stroke-width: 1; }
+.month-grid-line { stroke: #d2d9de; stroke-dasharray: 3 3; stroke-width: 1; }
 .axis-label { fill: #8a949d; font-size: 9.5px; }
 .tooltip-line { stroke: #98a1a9; stroke-width: 1; stroke-dasharray: 3 3; }
 .chart-tooltip { color: #52606c; min-height: 18px; padding: 0 5px; font-size: 12px; text-align: center; }

@@ -203,7 +203,7 @@ export default function App() {
               >{period.label}</button>)}
             </div>
           </div>
-          <LineChart {...visibleChart} axisOptimizationToken={axisOptimizationToken} periodSelectionToken={periodSelectionToken} />
+          <LineChart {...visibleChart} axisOptimizationToken={axisOptimizationToken} periodSelectionToken={periodSelectionToken} displayPeriodDays={periodDays} />
         </section>
         <section className="table-card" aria-labelledby="table-title">
           <div className="section-heading"><p className="eyebrow">DETAILS</p><h2 id="table-title">日別詳細</h2><p>直近1年・新しい日付順。表内を上下／横にスクロールできます</p></div>
