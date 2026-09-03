@@ -4,7 +4,7 @@ import { LineChart, type ChartSeries } from './components/LineChart'
 import { parseBodyCompositionCsv } from './lib/csv'
 import { getAllRecords, importMeasurements, saveCalories } from './lib/database'
 import { addDays, formatLongDate, todayInTokyo } from './lib/date'
-import { calorieBalance, recentChartPoints, totalCalories } from './lib/metrics'
+import { allChartPoints, calorieBalance, totalCalories } from './lib/metrics'
 import type { DailyRecord } from './types'
 
 type Notice = { kind: 'success' | 'error'; title: string; lines?: string[] }
@@ -54,18 +54,19 @@ export default function App() {
     refreshRecords().catch(() => setNotice({ kind: 'error', title: '端末内データを読み込めませんでした。' })).finally(() => setReady(true))
   }, [])
 
+  const latestRecordDate = useMemo(() => records.reduce<string | undefined>((latest, record) => !latest || record.date > latest ? record.date : latest, undefined), [records])
+  const chartPeriodStartDate = latestRecordDate ? addDays(latestRecordDate, -periodDays + 1) : undefined
   const points = useMemo(() => ({
-    weight: recentChartPoints(records, (record) => record.weightKg, periodDays),
-    fat: recentChartPoints(records, (record) => record.bodyFatKg, periodDays),
-    muscle: recentChartPoints(records, (record) => record.skeletalMuscleKg, periodDays),
-    calories: recentChartPoints(records, totalCalories, periodDays),
-    intake: recentChartPoints(records, (record) => record.intakeCalories, periodDays)
-  }), [records, periodDays])
+    weight: allChartPoints(records, (record) => record.weightKg, chartPeriodStartDate),
+    fat: allChartPoints(records, (record) => record.bodyFatKg, chartPeriodStartDate),
+    muscle: allChartPoints(records, (record) => record.skeletalMuscleKg, chartPeriodStartDate),
+    calories: allChartPoints(records, totalCalories, chartPeriodStartDate),
+    intake: allChartPoints(records, (record) => record.intakeCalories, chartPeriodStartDate)
+  }), [records, chartPeriodStartDate])
   const tableRecords = useMemo(() => {
-    const endDate = records.reduce<string | undefined>((latest, record) => !latest || record.date > latest ? record.date : latest, undefined)
-    const startDate = endDate ? addDays(endDate, -TABLE_DAYS + 1) : undefined
-    return records.filter((record) => !startDate || !endDate || (record.date >= startDate && record.date <= endDate))
-  }, [records])
+    const startDate = latestRecordDate ? addDays(latestRecordDate, -TABLE_DAYS + 1) : undefined
+    return records.filter((record) => !startDate || !latestRecordDate || (record.date >= startDate && record.date <= latestRecordDate))
+  }, [records, latestRecordDate])
   const chartConfigs: Record<ChartKey, { title: string; unit: string; description: string; series: ChartSeries[] }> = {
     weight: { title: '体重', unit: 'kg', description: '日ごとの体重', series: [{ label: '体重', color: '#e24949', points: points.weight }] },
     fat: { title: '脂肪量', unit: 'kg', description: '体脂肪量の推移', series: [{ label: '脂肪量', color: '#3978d9', points: points.fat }] },
@@ -174,7 +175,7 @@ export default function App() {
         </section>
       ) : <>
         <section className="charts-section" aria-label="選択した期間の推移">
-          <div className="section-heading"><p className="eyebrow">CHART</p><h2>推移</h2><p>グラフの種類と表示期間を選択できます</p></div>
+          <div className="section-heading"><p className="eyebrow">CHART</p><h2>推移</h2><p>選択した期間を基準に、2本指で過去の記録も確認できます</p></div>
           <div className="chart-switcher" role="group" aria-label="表示するグラフを選択">
             {CHART_BUTTONS.map((chart) => <button
               key={chart.key}

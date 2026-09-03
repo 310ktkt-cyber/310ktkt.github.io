@@ -37,4 +37,17 @@ describe('calories and moving averages', () => {
       { date: '2026-06-03', value: 64.5, average: 64.75 }
     ])
   })
+
+  it('can include leading empty days so the selected period has its full width', () => {
+    const points = allChartPoints(
+      [{ date: '2026-06-03', weightKg: 64.5, updatedAt: 'x' }],
+      (record) => record.weightKg,
+      '2026-06-01'
+    )
+    expect(points).toEqual([
+      { date: '2026-06-01', value: null, average: null },
+      { date: '2026-06-02', value: null, average: null },
+      { date: '2026-06-03', value: 64.5, average: 64.5 }
+    ])
+  })
 })

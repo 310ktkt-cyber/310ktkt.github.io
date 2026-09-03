@@ -24,8 +24,6 @@ const TOP_PADDING = 34
 const RIGHT_PADDING = 18
 const BOTTOM_PADDING = 36
 const MIN_CHART_WIDTH = 286
-const COMPACT_CHART_WIDTH = 260
-const POINT_SPACING = 10
 
 type AxisRange = { min: number; max: number }
 type SingleTouch = { startX: number; startY: number; moved: boolean }
@@ -73,11 +71,15 @@ export function LineChart({ title, unit, series, description, axisOptimizationTo
   const autoRange = useMemo(() => calculateAxisRange(recentValues, unit), [recentValues, unit])
   const [axisRange, setAxisRange] = useState<AxisRange>(autoRange)
   const [defaultAxisRange, setDefaultAxisRange] = useState<AxisRange>(autoRange)
+  const [viewportWidth, setViewportWidth] = useState(MIN_CHART_WIDTH)
+  const [visibleYearLabel, setVisibleYearLabel] = useState('')
   const { min, max } = axisRange
   const isMonthlyView = displayPeriodDays >= 90
-  const chartWidth = isMonthlyView
-    ? COMPACT_CHART_WIDTH
-    : Math.max(MIN_CHART_WIDTH, RIGHT_PADDING + Math.max(points.length - 1, 0) * POINT_SPACING)
+  const visiblePeriodSpan = Math.max(displayPeriodDays - 1, 1)
+  const chartWidth = Math.max(
+    viewportWidth,
+    viewportWidth * Math.max(points.length - 1, 1) / visiblePeriodSpan
+  )
   const plotWidth = chartWidth - RIGHT_PADDING - 4
   const plotHeight = HEIGHT - TOP_PADDING - BOTTOM_PADDING
   const x = (index: number) => 4 + (index / Math.max(points.length - 1, 1)) * plotWidth
@@ -121,22 +123,39 @@ export function LineChart({ title, unit, series, description, axisOptimizationTo
     return Math.round((position / renderedPlotWidth) * (points.length - 1))
   }
 
-  const valuesInVisibleWindow = (): number[] => {
+  const visiblePointIndexes = (): { first: number; last: number } => {
     const element = scrollContainer.current
     const chart = chartSvg.current
-    if (!element || !chart || points.length === 0) return recentValues
+    if (!element || !chart || points.length === 0) return { first: 0, last: Math.max(points.length - 1, 0) }
     const renderedWidth = chart.getBoundingClientRect().width
-    if (renderedWidth === 0) return recentValues
+    if (renderedWidth === 0) return { first: 0, last: Math.max(points.length - 1, 0) }
 
     const scale = chartWidth / renderedWidth
     const lastPointIndex = Math.max(points.length - 1, 1)
     const indexAtChartX = (chartX: number) => ((chartX - 4) / plotWidth) * lastPointIndex
-    const firstIndex = Math.max(0, Math.floor(indexAtChartX(element.scrollLeft * scale)))
-    const lastIndex = Math.min(points.length - 1, Math.ceil(indexAtChartX((element.scrollLeft + element.clientWidth) * scale)))
+    return {
+      first: Math.max(0, Math.floor(indexAtChartX(element.scrollLeft * scale))),
+      last: Math.min(points.length - 1, Math.ceil(indexAtChartX((element.scrollLeft + element.clientWidth) * scale)))
+    }
+  }
+
+  const valuesInVisibleWindow = (): number[] => {
+    if (points.length === 0) return recentValues
+    const { first, last } = visiblePointIndexes()
 
     return series
-      .flatMap((line) => line.points.slice(firstIndex, lastIndex + 1).flatMap((point) => [point.value, point.average]))
+      .flatMap((line) => line.points.slice(first, last + 1).flatMap((point) => [point.value, point.average]))
       .filter((value): value is number => value !== null)
+  }
+
+  const updateVisibleYearLabel = () => {
+    if (points.length === 0) return
+    const { first, last } = visiblePointIndexes()
+    const firstYear = points[first]?.date.slice(0, 4)
+    const lastYear = points[last]?.date.slice(0, 4)
+    if (!firstYear || !lastYear) return
+    const label = firstYear === lastYear ? `${firstYear}年` : `${firstYear}年〜${lastYear}年`
+    setVisibleYearLabel((current) => current === label ? current : label)
   }
 
   useEffect(() => {
@@ -146,8 +165,21 @@ export function LineChart({ title, unit, series, description, axisOptimizationTo
 
   useEffect(() => {
     const element = scrollContainer.current
-    if (element) element.scrollLeft = element.scrollWidth
+    if (element) {
+      element.scrollLeft = element.scrollWidth
+      updateVisibleYearLabel()
+    }
   }, [chartWidth])
+
+  useEffect(() => {
+    const element = scrollContainer.current
+    if (!element || !hasData) return
+    const updateViewportWidth = () => setViewportWidth(element.clientWidth || MIN_CHART_WIDTH)
+    updateViewportWidth()
+    const observer = new ResizeObserver(updateViewportWidth)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [hasData])
 
   useEffect(() => {
     setSelectedIndex(null)
@@ -250,8 +282,9 @@ export function LineChart({ title, unit, series, description, axisOptimizationTo
               className="chart-scroll"
               tabIndex={0}
               aria-label={isMonthlyView
-                ? `${title}のグラフ。選択した期間を画面内に表示し、月初の補助線を表示しています。`
+                ? `${title}のグラフ。選択した期間を画面内に表示し、月初の補助線を表示しています。2本指で右へなぞると過去の記録を確認できます。`
                 : `${title}のグラフ。日付の値は1本指でタップ、過去の記録は2本指で右へなぞって確認できます。`}
+              onScroll={updateVisibleYearLabel}
               onTouchStart={(event) => {
                 if (event.touches.length === 1) {
                   singleTouch.current = {
@@ -346,7 +379,7 @@ export function LineChart({ title, unit, series, description, axisOptimizationTo
                 const point = line.points[selectedIndex!]
                 return `${line.label} ${point?.value === null || !point ? '—' : formatValue(point.value, unit)}（7日平均 ${point?.average === null || !point ? '—' : formatValue(point.average, unit)}）`
               }).join(' / ')}`
-              : 'グラフをタップして日ごとの値を確認'}
+              : visibleYearLabel ? `表示中：${visibleYearLabel}` : ''}
           </p>
         </>
       ) : <div className="no-chart-data">この期間の{title}データはまだありません。</div>}

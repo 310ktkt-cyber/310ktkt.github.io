@@ -42,12 +42,14 @@ export function recentChartPoints(
 /** Returns every calendar day from the oldest to newest saved record, preserving gaps. */
 export function allChartPoints(
   records: DailyRecord[],
-  readValue: (record: DailyRecord) => number | undefined | null
+  readValue: (record: DailyRecord) => number | undefined | null,
+  minimumStartDate?: string
 ): ChartPoint[] {
   if (records.length === 0) return []
   const recordByDate = new Map(records.map((record) => [record.date, record]))
   const dates = records.map((record) => record.date).sort()
-  return chartPointsForRange(recordByDate, readValue, dates[0], dates.at(-1)!)
+  const startDate = minimumStartDate && minimumStartDate < dates[0] ? minimumStartDate : dates[0]
+  return chartPointsForRange(recordByDate, readValue, startDate, dates.at(-1)!)
 }
 
 function chartPointsForRange(
