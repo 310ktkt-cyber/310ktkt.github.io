@@ -4,17 +4,24 @@ import { LineChart, type ChartSeries } from './components/LineChart'
 import { parseBodyCompositionCsv } from './lib/csv'
 import { getAllRecords, importMeasurements, saveCalories } from './lib/database'
 import { addDays, formatLongDate, todayInTokyo } from './lib/date'
-import { allChartPoints, calorieBalance, totalCalories } from './lib/metrics'
+import { calorieBalance, recentChartPoints, totalCalories } from './lib/metrics'
 import type { DailyRecord } from './types'
 
 type Notice = { kind: 'success' | 'error'; title: string; lines?: string[] }
 type ChartKey = 'weight' | 'fat' | 'muscle' | 'calories'
+type PeriodDays = 14 | 30 | 90 | 180
 
 const CHART_BUTTONS: Array<{ key: ChartKey; label: string }> = [
   { key: 'weight', label: '体重' },
   { key: 'fat', label: '脂肪量' },
   { key: 'muscle', label: '筋肉量' },
   { key: 'calories', label: '消費・摂取' }
+]
+const PERIOD_BUTTONS: Array<{ days: PeriodDays; label: string }> = [
+  { days: 14, label: '2週間' },
+  { days: 30, label: '1ヶ月' },
+  { days: 90, label: '3ヶ月' },
+  { days: 180, label: '6ヶ月' }
 ]
 
 const numberFormat = (value: number | undefined, digits = 1) => value === undefined ? '—' : value.toLocaleString('ja-JP', { maximumFractionDigits: digits })
@@ -35,7 +42,9 @@ export default function App() {
   const [notice, setNotice] = useState<Notice | null>(null)
   const [form, setForm] = useState({ date: todayInTokyo(), intake: '', active: '' })
   const [selectedChart, setSelectedChart] = useState<ChartKey>('weight')
+  const [periodDays, setPeriodDays] = useState<PeriodDays>(30)
   const [axisOptimizationToken, setAxisOptimizationToken] = useState(0)
+  const [periodSelectionToken, setPeriodSelectionToken] = useState(0)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const refreshRecords = async () => {
@@ -46,12 +55,12 @@ export default function App() {
   }, [])
 
   const points = useMemo(() => ({
-    weight: allChartPoints(records, (record) => record.weightKg),
-    fat: allChartPoints(records, (record) => record.bodyFatKg),
-    muscle: allChartPoints(records, (record) => record.skeletalMuscleKg),
-    calories: allChartPoints(records, totalCalories),
-    intake: allChartPoints(records, (record) => record.intakeCalories)
-  }), [records])
+    weight: recentChartPoints(records, (record) => record.weightKg, periodDays),
+    fat: recentChartPoints(records, (record) => record.bodyFatKg, periodDays),
+    muscle: recentChartPoints(records, (record) => record.skeletalMuscleKg, periodDays),
+    calories: recentChartPoints(records, totalCalories, periodDays),
+    intake: recentChartPoints(records, (record) => record.intakeCalories, periodDays)
+  }), [records, periodDays])
   const tableRecords = useMemo(() => {
     const endDate = records.reduce<string | undefined>((latest, record) => !latest || record.date > latest ? record.date : latest, undefined)
     const startDate = endDate ? addDays(endDate, -TABLE_DAYS + 1) : undefined
@@ -164,8 +173,8 @@ export default function App() {
           <p>上のボタンから体組成計のCSVを取り込むか、日付とカロリーを入力して始めましょう。</p>
         </section>
       ) : <>
-        <section className="charts-section" aria-label="全期間の推移">
-          <div className="section-heading"><p className="eyebrow">ALL TIME</p><h2>推移</h2><p>表示したいグラフを選択してください。表示中の日付位置を保ち、その期間に合わせて軸を調整します</p></div>
+        <section className="charts-section" aria-label="選択した期間の推移">
+          <div className="section-heading"><p className="eyebrow">CHART</p><h2>推移</h2><p>グラフの種類と表示期間を選択できます</p></div>
           <div className="chart-switcher" role="group" aria-label="表示するグラフを選択">
             {CHART_BUTTONS.map((chart) => <button
               key={chart.key}
@@ -178,7 +187,23 @@ export default function App() {
               }}
             >{chart.label}</button>)}
           </div>
-          <LineChart {...visibleChart} axisOptimizationToken={axisOptimizationToken} />
+          <div className="period-selector" role="group" aria-label="グラフの表示期間を選択">
+            <span>表示期間</span>
+            <div>
+              {PERIOD_BUTTONS.map((period) => <button
+                key={period.days}
+                type="button"
+                className={period.days === periodDays ? 'is-active' : undefined}
+                aria-pressed={period.days === periodDays}
+                onClick={() => {
+                  setPeriodDays(period.days)
+                  setAxisOptimizationToken((token) => token + 1)
+                  setPeriodSelectionToken((token) => token + 1)
+                }}
+              >{period.label}</button>)}
+            </div>
+          </div>
+          <LineChart {...visibleChart} axisOptimizationToken={axisOptimizationToken} periodSelectionToken={periodSelectionToken} />
         </section>
         <section className="table-card" aria-labelledby="table-title">
           <div className="section-heading"><p className="eyebrow">DETAILS</p><h2 id="table-title">日別詳細</h2><p>直近1年・新しい日付順。表内を上下／横にスクロールできます</p></div>

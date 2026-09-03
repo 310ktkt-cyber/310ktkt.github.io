@@ -8,6 +8,7 @@ type Props = {
   description: string
   series: ChartSeries[]
   axisOptimizationToken: number
+  periodSelectionToken: number
 }
 
 export type ChartSeries = {
@@ -47,7 +48,7 @@ function calculateAxisRange(values: number[], unit: string): AxisRange {
   return { min: Math.max(0, smallest - padding), max: largest + padding }
 }
 
-export function LineChart({ title, unit, series, description, axisOptimizationToken }: Props) {
+export function LineChart({ title, unit, series, description, axisOptimizationToken, periodSelectionToken }: Props) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const scrollContainer = useRef<HTMLDivElement>(null)
   const chartSvg = useRef<SVGSVGElement>(null)
@@ -135,6 +136,10 @@ export function LineChart({ title, unit, series, description, axisOptimizationTo
     const element = scrollContainer.current
     if (element) element.scrollLeft = element.scrollWidth
   }, [chartWidth])
+
+  useEffect(() => {
+    setSelectedIndex(null)
+  }, [periodSelectionToken])
 
   useEffect(() => {
     const optimizedRange = calculateAxisRange(valuesInVisibleWindow(), unit)

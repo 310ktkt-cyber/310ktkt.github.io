@@ -55,6 +55,11 @@ input::placeholder { color: #b2b8be; }
 .chart-switcher button { background: #fff; border: 1px solid #d9dfe3; border-radius: 11px; color: #46525b; cursor: pointer; font-size: 13px; font-weight: 800; min-height: 44px; padding: 0 8px; touch-action: manipulation; }
 .chart-switcher button.is-active { background: #27313a; border-color: #27313a; color: #fff; }
 .chart-switcher button:focus-visible { outline: 3px solid #79a8f3; outline-offset: 2px; }
+.period-selector { align-items: center; color: #65717b; display: flex; flex-wrap: wrap; font-size: 12px; font-weight: 800; gap: 8px; padding: 2px 2px 0; }
+.period-selector > div { display: flex; flex: 1 1 260px; gap: 5px; }
+.period-selector button { background: #fff; border: 1px solid #d9dfe3; border-radius: 999px; color: #53606a; cursor: pointer; flex: 1 1 0; font-size: 12px; font-weight: 800; min-height: 36px; padding: 0 5px; touch-action: manipulation; white-space: nowrap; }
+.period-selector button.is-active { background: #e9eff5; border-color: #8ea1b2; color: #27313a; }
+.period-selector button:focus-visible { outline: 3px solid #79a8f3; outline-offset: 2px; }
 .chart-card { padding: 17px 12px 13px; overflow: hidden; }
 .chart-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 0 5px; }
 .chart-heading h2 { font-size: 18px; }
