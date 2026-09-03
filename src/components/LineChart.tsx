@@ -7,6 +7,7 @@ type Props = {
   unit: string
   description: string
   series: ChartSeries[]
+  axisOptimizationToken: number
 }
 
 export type ChartSeries = {
@@ -46,7 +47,7 @@ function calculateAxisRange(values: number[], unit: string): AxisRange {
   return { min: Math.max(0, smallest - padding), max: largest + padding }
 }
 
-export function LineChart({ title, unit, series, description }: Props) {
+export function LineChart({ title, unit, series, description, axisOptimizationToken }: Props) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const scrollContainer = useRef<HTMLDivElement>(null)
   const chartSvg = useRef<SVGSVGElement>(null)
@@ -64,6 +65,7 @@ export function LineChart({ title, unit, series, description }: Props) {
     .filter((value): value is number => value !== null)
   const autoRange = useMemo(() => calculateAxisRange(recentValues, unit), [recentValues, unit])
   const [axisRange, setAxisRange] = useState<AxisRange>(autoRange)
+  const [defaultAxisRange, setDefaultAxisRange] = useState<AxisRange>(autoRange)
   const { min, max } = axisRange
   const chartWidth = Math.max(MIN_CHART_WIDTH, RIGHT_PADDING + Math.max(points.length - 1, 0) * POINT_SPACING)
   const plotWidth = chartWidth - RIGHT_PADDING - 4
@@ -106,7 +108,26 @@ export function LineChart({ title, unit, series, description }: Props) {
     return Math.round((position / renderedPlotWidth) * (points.length - 1))
   }
 
+  const valuesInVisibleWindow = (): number[] => {
+    const element = scrollContainer.current
+    const chart = chartSvg.current
+    if (!element || !chart || points.length === 0) return recentValues
+    const renderedWidth = chart.getBoundingClientRect().width
+    if (renderedWidth === 0) return recentValues
+
+    const scale = chartWidth / renderedWidth
+    const lastPointIndex = Math.max(points.length - 1, 1)
+    const indexAtChartX = (chartX: number) => ((chartX - 4) / plotWidth) * lastPointIndex
+    const firstIndex = Math.max(0, Math.floor(indexAtChartX(element.scrollLeft * scale)))
+    const lastIndex = Math.min(points.length - 1, Math.ceil(indexAtChartX((element.scrollLeft + element.clientWidth) * scale)))
+
+    return series
+      .flatMap((line) => line.points.slice(firstIndex, lastIndex + 1).flatMap((point) => [point.value, point.average]))
+      .filter((value): value is number => value !== null)
+  }
+
   useEffect(() => {
+    setDefaultAxisRange(autoRange)
     setAxisRange(autoRange)
   }, [autoRange.min, autoRange.max])
 
@@ -114,6 +135,12 @@ export function LineChart({ title, unit, series, description }: Props) {
     const element = scrollContainer.current
     if (element) element.scrollLeft = element.scrollWidth
   }, [chartWidth])
+
+  useEffect(() => {
+    const optimizedRange = calculateAxisRange(valuesInVisibleWindow(), unit)
+    setDefaultAxisRange(optimizedRange)
+    setAxisRange(optimizedRange)
+  }, [axisOptimizationToken])
 
   useEffect(() => {
     const element = scrollContainer.current
@@ -178,7 +205,7 @@ export function LineChart({ title, unit, series, description }: Props) {
       {hasData ? (
         <>
           <div className="axis-controls" role="group" aria-label={`${title}の縦軸の範囲を調整`}>
-            <span>Y軸（直近30日を基準）</span>
+            <span>Y軸（表示中の期間を基準）</span>
             <div className="axis-control-actions">
               <div className="axis-bound">
                 <span>下限 {formatAxisValue(min, unit)}</span>
@@ -190,7 +217,7 @@ export function LineChart({ title, unit, series, description }: Props) {
                 <button type="button" onClick={() => adjustUpper(-1)} aria-label={`${title}の縦軸の上限を下げる`}>−</button>
                 <button type="button" onClick={() => adjustUpper(1)} aria-label={`${title}の縦軸の上限を上げる`}>＋</button>
               </div>
-              <button className="axis-reset" type="button" onClick={() => setAxisRange(autoRange)}>自動に戻す</button>
+              <button className="axis-reset" type="button" onClick={() => setAxisRange(defaultAxisRange)}>自動に戻す</button>
             </div>
           </div>
           <div className="chart-plot-layout">

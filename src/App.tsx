@@ -35,6 +35,7 @@ export default function App() {
   const [notice, setNotice] = useState<Notice | null>(null)
   const [form, setForm] = useState({ date: todayInTokyo(), intake: '', active: '' })
   const [selectedChart, setSelectedChart] = useState<ChartKey>('weight')
+  const [axisOptimizationToken, setAxisOptimizationToken] = useState(0)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const refreshRecords = async () => {
@@ -164,17 +165,20 @@ export default function App() {
         </section>
       ) : <>
         <section className="charts-section" aria-label="全期間の推移">
-          <div className="section-heading"><p className="eyebrow">ALL TIME</p><h2>推移</h2><p>表示したいグラフを選択してください。表示中の日付位置を保ったまま切り替わります</p></div>
+          <div className="section-heading"><p className="eyebrow">ALL TIME</p><h2>推移</h2><p>表示したいグラフを選択してください。表示中の日付位置を保ち、その期間に合わせて軸を調整します</p></div>
           <div className="chart-switcher" role="group" aria-label="表示するグラフを選択">
             {CHART_BUTTONS.map((chart) => <button
               key={chart.key}
               type="button"
               className={chart.key === selectedChart ? 'is-active' : undefined}
               aria-pressed={chart.key === selectedChart}
-              onClick={() => setSelectedChart(chart.key)}
+              onClick={() => {
+                setSelectedChart(chart.key)
+                setAxisOptimizationToken((token) => token + 1)
+              }}
             >{chart.label}</button>)}
           </div>
-          <LineChart {...visibleChart} />
+          <LineChart {...visibleChart} axisOptimizationToken={axisOptimizationToken} />
         </section>
         <section className="table-card" aria-labelledby="table-title">
           <div className="section-heading"><p className="eyebrow">DETAILS</p><h2 id="table-title">日別詳細</h2><p>直近1年・新しい日付順。表内を上下／横にスクロールできます</p></div>
