@@ -35,7 +35,6 @@ export default function App() {
   const [notice, setNotice] = useState<Notice | null>(null)
   const [form, setForm] = useState({ date: todayInTokyo(), intake: '', active: '' })
   const [selectedChart, setSelectedChart] = useState<ChartKey>('weight')
-  const [chartViewRevision, setChartViewRevision] = useState(0)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const refreshRecords = async () => {
@@ -165,27 +164,24 @@ export default function App() {
         </section>
       ) : <>
         <section className="charts-section" aria-label="全期間の推移">
-          <div className="section-heading"><p className="eyebrow">ALL TIME</p><h2>推移</h2><p>表示したいグラフを選択してください。選ぶたびに最新位置と軸を更新します</p></div>
+          <div className="section-heading"><p className="eyebrow">ALL TIME</p><h2>推移</h2><p>表示したいグラフを選択してください。表示中の日付位置を保ったまま切り替わります</p></div>
           <div className="chart-switcher" role="group" aria-label="表示するグラフを選択">
             {CHART_BUTTONS.map((chart) => <button
               key={chart.key}
               type="button"
               className={chart.key === selectedChart ? 'is-active' : undefined}
               aria-pressed={chart.key === selectedChart}
-              onClick={() => {
-                setSelectedChart(chart.key)
-                setChartViewRevision((revision) => revision + 1)
-              }}
+              onClick={() => setSelectedChart(chart.key)}
             >{chart.label}</button>)}
           </div>
-          <LineChart key={`${selectedChart}-${chartViewRevision}`} {...visibleChart} />
+          <LineChart {...visibleChart} />
         </section>
         <section className="table-card" aria-labelledby="table-title">
           <div className="section-heading"><p className="eyebrow">DETAILS</p><h2 id="table-title">日別詳細</h2><p>直近1年・新しい日付順。表内を上下／横にスクロールできます</p></div>
           <div className="table-wrap" tabIndex={0} aria-label="直近1年の日別詳細表。上下と横方向にスクロールできます。">
             <table>
               <thead><tr>
-                <th className="sticky-date">日付</th><th>体重<br />(kg)</th><th>体脂肪率<br />(%)</th><th>体脂肪量<br />(kg)</th><th>皮下脂肪率<br />(%)</th><th>内臓脂肪<br />レベル</th><th>基礎代謝<br />(kcal)</th><th>骨格筋率<br />(%)</th><th>筋肉量<br />(kg)</th><th>摂取<br />(kcal)</th><th>アクティブ消費<br />(kcal)</th><th>合計消費<br />(kcal)</th><th>カロリー収支<br />(消費−摂取)</th>
+                <th className="sticky-date">日付</th><th>体重<br />(kg)</th><th>体脂肪率<br />(%)</th><th>体脂肪量<br />(kg)</th><th>皮下脂肪率<br />(%)</th><th>内臓脂肪<br />レベル</th><th>基礎代謝<br />(kcal)</th><th>骨格筋率<br />(%)</th><th>筋肉量<br />(kg)</th><th>摂取<br />(kcal)</th><th>アクティブ消費<br />(kcal)</th><th>合計消費<br />(kcal)</th><th>カロリー収支<br />(摂取−消費)</th>
               </tr></thead>
               <tbody>{tableRecords.map((record) => <tr key={record.date}>
                 <th className="sticky-date" scope="row">{formatLongDate(record.date)}</th>

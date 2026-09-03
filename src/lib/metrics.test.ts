@@ -7,8 +7,8 @@ describe('calories and moving averages', () => {
     expect(totalCalories({ date: '2026-07-10', basalMetabolismKcal: 1531, updatedAt: 'x' })).toBeNull()
   })
 
-  it('calculates calorie balance as total calories burned minus calories consumed', () => {
-    expect(calorieBalance({ date: '2026-07-10', basalMetabolismKcal: 1531, activeCalories: 420, intakeCalories: 1800, updatedAt: 'x' })).toBe(151)
+  it('calculates calorie balance as calories consumed minus total calories burned', () => {
+    expect(calorieBalance({ date: '2026-07-10', basalMetabolismKcal: 1531, activeCalories: 420, intakeCalories: 1800, updatedAt: 'x' })).toBe(-151)
     expect(calorieBalance({ date: '2026-07-10', basalMetabolismKcal: 1531, activeCalories: 420, updatedAt: 'x' })).toBeNull()
   })
 
