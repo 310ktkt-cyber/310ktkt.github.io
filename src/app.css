@@ -51,6 +51,10 @@ input::placeholder { color: #b2b8be; }
 
 .section-heading { margin: 0 3px 12px; }
 .charts-section { display: grid; gap: 13px; margin-bottom: 29px; }
+.chart-switcher { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.chart-switcher button { background: #fff; border: 1px solid #d9dfe3; border-radius: 11px; color: #46525b; cursor: pointer; font-size: 13px; font-weight: 800; min-height: 44px; padding: 0 8px; touch-action: manipulation; }
+.chart-switcher button.is-active { background: #27313a; border-color: #27313a; color: #fff; }
+.chart-switcher button:focus-visible { outline: 3px solid #79a8f3; outline-offset: 2px; }
 .chart-card { padding: 17px 12px 13px; overflow: hidden; }
 .chart-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 0 5px; }
 .chart-heading h2 { font-size: 18px; }
@@ -81,14 +85,14 @@ input::placeholder { color: #b2b8be; }
 
 .table-card { padding: 18px 0 6px; overflow: hidden; }
 .table-card .section-heading { padding: 0 15px; }
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-color: #c0c5ca transparent; }
-table { border-collapse: separate; border-spacing: 0; min-width: 999px; width: 100%; font-size: 12px; }
+.table-wrap { max-height: min(70svh, 620px); overflow: auto; -webkit-overflow-scrolling: touch; scrollbar-color: #c0c5ca transparent; }
+table { border-collapse: separate; border-spacing: 0; min-width: 1170px; width: 100%; font-size: 12px; }
 th, td { border-bottom: 1px solid #e9ebed; min-width: 82px; padding: 11px 9px; text-align: right; white-space: nowrap; }
-thead th { background: #f6f7f8; color: #53606a; font-size: 10px; font-weight: 800; line-height: 1.4; text-align: right; }
+thead th { background: #f6f7f8; color: #53606a; font-size: 10px; font-weight: 800; line-height: 1.4; position: sticky; text-align: right; top: 0; z-index: 3; }
 tbody td { color: #2d3740; }
 tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
 .sticky-date { background: #fff; box-shadow: 3px 0 5px rgb(26 35 43 / .045); left: 0; min-width: 93px; position: sticky; text-align: left; z-index: 2; }
-thead .sticky-date { background: #f6f7f8; z-index: 3; }
+thead .sticky-date { background: #f6f7f8; z-index: 4; }
 
 .empty-state { margin-top: 8px; padding: 35px 25px; text-align: center; }
 .empty-state div { color: #d63b3b; font-size: 44px; line-height: 1; transform: rotate(-20deg); }

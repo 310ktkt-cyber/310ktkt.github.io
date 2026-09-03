@@ -12,6 +12,13 @@ export function totalCalories(record: DailyRecord): number | null {
   return record.basalMetabolismKcal + record.activeCalories
 }
 
+/** Positive values mean that total calories burned exceeded calories consumed. */
+export function calorieBalance(record: DailyRecord): number | null {
+  const total = totalCalories(record)
+  if (total === null || record.intakeCalories === undefined) return null
+  return total - record.intakeCalories
+}
+
 export function sevenDayMovingAverage(values: Array<number | null>): Array<number | null> {
   return values.map((_, index) => {
     const available = values.slice(Math.max(0, index - 6), index + 1).filter((value): value is number => value !== null)

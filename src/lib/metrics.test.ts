@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { allChartPoints, recentChartPoints, sevenDayMovingAverage, totalCalories } from './metrics'
+import { allChartPoints, calorieBalance, recentChartPoints, sevenDayMovingAverage, totalCalories } from './metrics'
 
 describe('calories and moving averages', () => {
   it('only calculates total calories when both source values exist', () => {
     expect(totalCalories({ date: '2026-07-10', basalMetabolismKcal: 1531, activeCalories: 420, updatedAt: 'x' })).toBe(1951)
     expect(totalCalories({ date: '2026-07-10', basalMetabolismKcal: 1531, updatedAt: 'x' })).toBeNull()
+  })
+
+  it('calculates calorie balance as total calories burned minus calories consumed', () => {
+    expect(calorieBalance({ date: '2026-07-10', basalMetabolismKcal: 1531, activeCalories: 420, intakeCalories: 1800, updatedAt: 'x' })).toBe(151)
+    expect(calorieBalance({ date: '2026-07-10', basalMetabolismKcal: 1531, activeCalories: 420, updatedAt: 'x' })).toBeNull()
   })
 
   it('uses available values within the most recent seven calendar days', () => {

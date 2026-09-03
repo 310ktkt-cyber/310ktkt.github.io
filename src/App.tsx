@@ -1,16 +1,25 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import './app.css'
-import { LineChart } from './components/LineChart'
+import { LineChart, type ChartSeries } from './components/LineChart'
 import { parseBodyCompositionCsv } from './lib/csv'
 import { getAllRecords, importMeasurements, saveCalories } from './lib/database'
 import { addDays, formatLongDate, todayInTokyo } from './lib/date'
-import { allChartPoints, totalCalories } from './lib/metrics'
+import { allChartPoints, calorieBalance, totalCalories } from './lib/metrics'
 import type { DailyRecord } from './types'
 
 type Notice = { kind: 'success' | 'error'; title: string; lines?: string[] }
+type ChartKey = 'weight' | 'fat' | 'muscle' | 'calories'
+
+const CHART_BUTTONS: Array<{ key: ChartKey; label: string }> = [
+  { key: 'weight', label: '体重' },
+  { key: 'fat', label: '脂肪量' },
+  { key: 'muscle', label: '筋肉量' },
+  { key: 'calories', label: '消費・摂取' }
+]
 
 const numberFormat = (value: number | undefined, digits = 1) => value === undefined ? '—' : value.toLocaleString('ja-JP', { maximumFractionDigits: digits })
-const kcalFormat = (value: number | undefined) => value === undefined ? '—' : value.toLocaleString('ja-JP', { maximumFractionDigits: 0 })
+const kcalFormat = (value: number | null | undefined) => value === null || value === undefined ? '—' : value.toLocaleString('ja-JP', { maximumFractionDigits: 0 })
+const balanceFormat = (value: number | null) => value === null ? '—' : `${value > 0 ? '+' : ''}${value.toLocaleString('ja-JP', { maximumFractionDigits: 0 })}`
 const TABLE_DAYS = 365
 
 function inputNumber(value: string): number | undefined {
@@ -25,6 +34,8 @@ export default function App() {
   const [isImporting, setIsImporting] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [form, setForm] = useState({ date: todayInTokyo(), intake: '', active: '' })
+  const [selectedChart, setSelectedChart] = useState<ChartKey>('weight')
+  const [chartViewRevision, setChartViewRevision] = useState(0)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const refreshRecords = async () => {
@@ -46,6 +57,21 @@ export default function App() {
     const startDate = endDate ? addDays(endDate, -TABLE_DAYS + 1) : undefined
     return records.filter((record) => !startDate || !endDate || (record.date >= startDate && record.date <= endDate))
   }, [records])
+  const chartConfigs: Record<ChartKey, { title: string; unit: string; description: string; series: ChartSeries[] }> = {
+    weight: { title: '体重', unit: 'kg', description: '日ごとの体重', series: [{ label: '体重', color: '#e24949', points: points.weight }] },
+    fat: { title: '脂肪量', unit: 'kg', description: '体脂肪量の推移', series: [{ label: '脂肪量', color: '#3978d9', points: points.fat }] },
+    muscle: { title: '筋肉量', unit: 'kg', description: '骨格筋量の推移', series: [{ label: '筋肉量', color: '#2c9a69', points: points.muscle }] },
+    calories: {
+      title: '消費・摂取カロリー',
+      unit: 'kcal',
+      description: '消費 = 基礎代謝 + アクティブ消費',
+      series: [
+        { label: '消費カロリー', color: '#20242a', points: points.calories },
+        { label: '摂取カロリー', color: '#c18a00', points: points.intake }
+      ]
+    }
+  }
+  const visibleChart = chartConfigs[selectedChart]
 
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -139,25 +165,31 @@ export default function App() {
         </section>
       ) : <>
         <section className="charts-section" aria-label="全期間の推移">
-          <div className="section-heading"><p className="eyebrow">ALL TIME</p><h2>推移</h2><p>右端が最新です。過去の記録はグラフを2本指で右へなぞって確認</p></div>
-          <LineChart title="体重" unit="kg" description="日ごとの体重" series={[{ label: '体重', color: '#e24949', points: points.weight }]} />
-          <LineChart title="脂肪量" unit="kg" description="体脂肪量の推移" series={[{ label: '脂肪量', color: '#3978d9', points: points.fat }]} />
-          <LineChart title="筋肉量" unit="kg" description="骨格筋量の推移" series={[{ label: '筋肉量', color: '#2c9a69', points: points.muscle }]} />
-          <LineChart title="消費・摂取カロリー" unit="kcal" description="消費 = 基礎代謝 + アクティブ消費" series={[
-            { label: '消費カロリー', color: '#20242a', points: points.calories },
-            { label: '摂取カロリー', color: '#c18a00', points: points.intake }
-          ]} />
+          <div className="section-heading"><p className="eyebrow">ALL TIME</p><h2>推移</h2><p>表示したいグラフを選択してください。選ぶたびに最新位置と軸を更新します</p></div>
+          <div className="chart-switcher" role="group" aria-label="表示するグラフを選択">
+            {CHART_BUTTONS.map((chart) => <button
+              key={chart.key}
+              type="button"
+              className={chart.key === selectedChart ? 'is-active' : undefined}
+              aria-pressed={chart.key === selectedChart}
+              onClick={() => {
+                setSelectedChart(chart.key)
+                setChartViewRevision((revision) => revision + 1)
+              }}
+            >{chart.label}</button>)}
+          </div>
+          <LineChart key={`${selectedChart}-${chartViewRevision}`} {...visibleChart} />
         </section>
         <section className="table-card" aria-labelledby="table-title">
-          <div className="section-heading"><p className="eyebrow">DETAILS</p><h2 id="table-title">日別詳細</h2><p>直近1年・新しい日付順。下へスクロールして確認できます</p></div>
-          <div className="table-wrap" tabIndex={0} aria-label="直近1年の日別詳細表。横方向にスクロールできます。">
+          <div className="section-heading"><p className="eyebrow">DETAILS</p><h2 id="table-title">日別詳細</h2><p>直近1年・新しい日付順。表内を上下／横にスクロールできます</p></div>
+          <div className="table-wrap" tabIndex={0} aria-label="直近1年の日別詳細表。上下と横方向にスクロールできます。">
             <table>
               <thead><tr>
-                <th className="sticky-date">日付</th><th>体重<br />(kg)</th><th>体脂肪率<br />(%)</th><th>体脂肪量<br />(kg)</th><th>皮下脂肪率<br />(%)</th><th>内臓脂肪<br />レベル</th><th>基礎代謝<br />(kcal)</th><th>骨格筋率<br />(%)</th><th>筋肉量<br />(kg)</th><th>摂取<br />(kcal)</th><th>アクティブ消費<br />(kcal)</th>
+                <th className="sticky-date">日付</th><th>体重<br />(kg)</th><th>体脂肪率<br />(%)</th><th>体脂肪量<br />(kg)</th><th>皮下脂肪率<br />(%)</th><th>内臓脂肪<br />レベル</th><th>基礎代謝<br />(kcal)</th><th>骨格筋率<br />(%)</th><th>筋肉量<br />(kg)</th><th>摂取<br />(kcal)</th><th>アクティブ消費<br />(kcal)</th><th>合計消費<br />(kcal)</th><th>カロリー収支<br />(消費−摂取)</th>
               </tr></thead>
               <tbody>{tableRecords.map((record) => <tr key={record.date}>
                 <th className="sticky-date" scope="row">{formatLongDate(record.date)}</th>
-                <td>{numberFormat(record.weightKg)}</td><td>{numberFormat(record.bodyFatPct)}</td><td>{numberFormat(record.bodyFatKg)}</td><td>{numberFormat(record.subcutaneousFatPct)}</td><td>{numberFormat(record.visceralFatLevel)}</td><td>{kcalFormat(record.basalMetabolismKcal)}</td><td>{numberFormat(record.skeletalMusclePct)}</td><td>{numberFormat(record.skeletalMuscleKg)}</td><td>{kcalFormat(record.intakeCalories)}</td><td>{kcalFormat(record.activeCalories)}</td>
+                <td>{numberFormat(record.weightKg)}</td><td>{numberFormat(record.bodyFatPct)}</td><td>{numberFormat(record.bodyFatKg)}</td><td>{numberFormat(record.subcutaneousFatPct)}</td><td>{numberFormat(record.visceralFatLevel)}</td><td>{kcalFormat(record.basalMetabolismKcal)}</td><td>{numberFormat(record.skeletalMusclePct)}</td><td>{numberFormat(record.skeletalMuscleKg)}</td><td>{kcalFormat(record.intakeCalories)}</td><td>{kcalFormat(record.activeCalories)}</td><td>{kcalFormat(totalCalories(record))}</td><td>{balanceFormat(calorieBalance(record))}</td>
               </tr>)}</tbody>
             </table>
           </div>
